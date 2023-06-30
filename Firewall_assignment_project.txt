@@ -1,0 +1,155 @@
+(10)Name: Ian Rowland
+(20)ET4028
+(30)ID: 19190859
+(40)Border Router
+(50)BorderRouter>enable
+(60)BorderRouter#config t
+(70)BorderRouter(config)#router rip
+(80)BorderRouter(config-router)#version 2
+(90)BorderRouter(config-router)#network 147.17.0.0
+(100)BorderRouter(config-router)#network 10.0.0.0
+(105)BorderRouter(config-router)#network 136.201.0.0
+(110)InternalRouter>enable
+(120)InternalRouter#config t
+(130)InternalRouter(config)#router rip
+(140)InternalRouter(config-router)#version 2
+(150)InternalRouter(config-router)#network 147.17.0.0
+
+(160)BORDER ROUTER from here to [800]
+(170)FastEthernet 0/0(connected to internet)
+(180)ip access-list extended inBorderRouter00
+(190)deny ip 166.60.0.0 0.0.255.255 147.17.0.0 0.0.255.255 -- deny access to evilgroup
+(200)deny ip 147.17.0.0 0.0.255.255 147.17.0.0 0.0.255.255 -- deny incoming from own range
+(210)permit tcp 136.201.0.0 0.0.255.255 gt 1023 147.17.4.128 eq 22 -- allow partner to ssh syslog
+(220)permit tcp 136.201.0.0 0.0.255.255 gt 1023 147.17.4.128 eq 514 -- allow partner to send logs to syslog
+(230)permit udp 136.201.0.0 0.0.255.255 gt 1023 147.17.3.10 eq 123 -- allow partner to contact ntp
+(240)permit tcp any gt 1023 147.17.1.50 eq 53 -- any machine to dns
+(250)permit tcp any eq 25 147.17.1.60 eq 25 -- any to mail
+(260)permit tcp any gt 1023 147.17.1.70 eq 443 reflect webserveralltraffic -- any to web server
+(270)evaluate webservertraffic -- evaluate webserver to workstation
+(290)deny ip any any
+(300)exit
+(310)int FastEthernet0/0
+(320)ip access-group inBorderRouter00 in
+
+(330)ip access-list extended outBorderRouter00
+(340)evaluate webserveralltraffic -- evaluate return traffic from reflect
+(350)deny ip 147.17.4.0 0.0.0.127 any -- prevent trafic from admin pcs from leaving network
+(360)permit tcp 147.17.1.50 gt 1023 any eq 53 -- dns to any machine outside on port 53
+(370)permit tcp 147.17.1.60 any eq 25 -- mail server to any on smtp
+(380)permit tcp 147.17.2.0 0.0.0.255 gt 1023 any eq 443 reflect webservertraffic -- workstation to any webserver
+(390)deny ip any any -- deny outgoing ip outside of corp net range
+(400)exit
+(410)int FastEthernet0/0
+(420)ip access-group outBorderRouter00 out
+
+(430)FastEthernet 1/0 -> Screened subnet
+(440)ip access-list extended inBorderRouter10
+(450)evaluate webserveralltraffic -- evaluate return traffic from reflect
+(460)permit tcp 147.17.1.50 gt 1023 any eq 53 -- dns to any outside on port 53
+(470)permit  tcp 147.17.1.60 any eq 25 -- mail server to any on smtp
+(480)permit tcp 147.17.0.0 0.0.255.255 gt 1023 147.17.4.128 eq 514 -- allow all to send logs to syslog
+(490)evaluate webservertraffic --web server eval to workstation
+(500)evaluate dns traffic--dns eval to workstation
+(510)evaluate mailtraffic-- mail server eval to workstation
+(520)evaluate mail25
+(530)permit tcp 147.17.1.70 gt 1023 147.17.3.20 eq 3360 reflect webtosql --web server to mysql
+(540)permit udp 147.17.1.70 gt 1023 147.17.3.10 eq 123 --web server to ntp
+(550)permit udp 147.17.0.0 0.0.25.255 gt 1023 147.17.3.19 eq 123 -- all internal to ntp
+(560)deny ip any any
+(570)exit
+(580)int FastEthernet1/0
+(590)ip access-group inBorderRouter10 in
+
+(600)FastEthernet 2/0 -> Workstation network
+(610)ip access-list extended inBorderRouter20
+(615)permit tcp 147.17.2.0 0.0.0.255 gt 1023 147.17.1.70 eq 443 reflect webservertraffic
+(620)permit tcp 147.17.2.0 0.0.0.255 gt 1023 any eq 443 reflect webservertraffic -- workstation to any webserver
+(630)evaluate webtosql --mysql responses to requests
+(640)permit tcp 147.17.2.0 0.0.0.255 gt 1023 147.17.1.50 eq 53 reflect dnstraffic
+(650)permit tcp 147.17.2.0 0.0.0.255 gt 1023 147.17.1.60 eq 25 reflect mail25
+(660)permit tcp 147.17.2.0 0.0.0.255 gt 1023 147.17.1.60 eq 220 reflect mailtraffic
+(680)permit tcp 147.17.0.0 0.0.255.255 gt 1023 147.17.1.50 eq 53 reflect dnstraffic --permit any in network to dns
+(690)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.0.0 0.0.255.255 eq 6568 --permit admins to screened subnet for anydesk
+(710)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.1.50 eq 53 reflect dnstraffic --permit dns server reflect
+(720)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.1.60 eq 25 reflect mail25
+(730)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.1.60 eq 220 reflect mailtraffic
+(740)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.1.70 eq 443 reflect webservertraffic
+(742)permit tcp 147.17.3.10 eq 25 147.17.1.60 eq 25 reflect mailtraffic --ntp to mail 
+(744)permit tcp 147.17.3.10 gt 1023 147.17.1.70 eq 443 reflect webservertraffic --reflect webservertraffic--ntp to web
+(746)permit tcp 147.17.1.70 gt 1023 147.17.1.50 eq 53 reflect dnstraffic --ntp to dns
+(770)deny ip any any
+(780)exit
+(790)int FastEthernet2/0
+(800)ip access-group inBorderRouter20 in
+
+(810)INTERNAL ROUTER ACLS from here to line[1240]
+(820)FastEthernet 0/0 -> workstation
+(830)ip access-list extended inInternalRouter00
+(840)evaluate webservertraffic --web server eval to admin
+(850)evaluate dnstraffic--dns eval to admin
+(860)evaluate mailtraffic-- mail server eval to admin
+(870)evaluate mail25
+(880)permit tcp 136.201.0.0 0.0.255.255 gt 1023 147.17.4.128 eq 22 -- allow partner to ssh syslog
+(890)permit tcp 136.201.0.0 0.0.255.255 gt 1023 147.17.4.128 eq 514 -- allow partner to send logs to syslog
+(900)permit tcp 147.17.0.0 0.0.255.255 gt 1023 147.17.4.128 eq 514 -- allow any internal to syslog
+(910)permit tcp 147.17.1.70 gt 1023 147.17.3.20 eq 3360 reflect webtosql--web server to mysql reflect
+(920)permit tcp 147.17.2.0 0.0.0.255 gt 1023 147.17.3.20 eq 3360 reflect mysqltraffic --workstation to mysql reflect
+(930)permit udp 147.17.2.0 0.0.0.255 gt 1023 147.17.3.10 eq 123 reflect ntptraffic --workstation to ntp reflect
+(940)permit udp 136.201.0.0 0.0.255.255 gt 1023 147.17.3.10 eq 123 -- allow partner to contact ntp --partner to ntp
+(950)deny ip any any
+(960)exit
+(970)int FastEthernet0/0
+(980)ip access-group inInternalRouter00 in
+
+(990)FastEthernet1/0 -> server net
+(1000)ip access-list extended inInternalRouter10
+(1010)evaluate mysqltraffic --server responses to workstation
+(1020)evaluate webtosql --mysql responses to requests, can only respond and send logs
+(1030)evaluate ntptraffic
+(1040)permit tcp 147.17.3.0 0.0.0.255 gt 1023 147.17.4.128 eq 514--internal machines to syslog
+(1060)permit tcp 147.17.3.10 eq 25 147.17.1.60 eq 25 reflect mailtraffic--ntp to mail 
+(1062)permit tcp 147.17.3.10 gt 1023 147.17.1.70 eq 443 reflect webservertraffic --ntp to web
+(1064)permit tcp 147.17.3.10 gt 1023 147.17.1.50 eq 53 reflect dnstraffic --ntp to dns
+(1070)deny ip any any
+(1080)exit
+(1090)int FastEthernet1/0
+(1100)ip access-group inInternalRouter10 in
+
+(1110)FastEthernet2/0 -> admin network
+(1120)ip access-list extended inInternalRouter20
+(1130)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.0.0 0.0.255.255 eq 6568 --admin to any internal via anydesk
+(1140)deny ip 147.17.4.128 any --syslog cant start comms outside network, can only receive logs and be ssh'd
+(1150)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.4.128 eq 514 --internal machines to syslog
+(1160)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.1.50 eq 53 reflect dnstraffic
+(1170)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.1.60 eq 25 reflect mail25
+(1180)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.1.60 eq 220 reflect mailtraffic
+(1190)permit tcp 147.17.4.0 0.0.0.127 gt 1023 147.17.1.70 eq 443 reflect webservertraffic
+(1200)permit udp 147.17.4.0 0.0.0.127 gt 1023 147.17.3.10 eq 123 --internal access ntp
+(1210)deny ip any any --admins cant comm outside corp net
+(1220)exit
+(1230)int FastEthernet2/0
+(1240)ip access-group inInternalRouter20 in
+
+(1250)Evaluation Question
+(1260)1. The packet from 166.60.6.6 is denied entry into the network due to rule [190], which denies entry from the evilgroup ip address range into the network
+(1270)2. This request will be denied as rule[200] on the internet facing interface denies traffic entering from outside the corporate network that has an ip address matching the range of the corporate network - such packets are suspicious by nature and likely always spoofed.
+(1280)3. This will be permitted as per rule [240] which permits any address to contact the dns server. Rule [360] and [460](rule repeated on an inbound and outbound rule to ensure valid packets are not dropped) allows dns server to communicate with any other machine on port 53, which may also offer the potential for return traffic between the two machines.
+(1290)4. No, this packet should not be permitted, as the web server is on port 443, not port 80, as seen by rule[260]. As the packet should not meet the permit rquirements of any rule, it would be denied by [290] which serves as an explicit version of the implcit deny principle, denying packets that are not explicitly permitted.
+(1300)5. Yes, this should be allowed as per rule[260], as the port number is suitable(>1023) and is accessing the correct port on the web server at 443. Return traffic should be allowed at [340] and [450] evaluate rule, as rule[260] is a reflexive rule.
+(1310)6. 136.201,22,1 is part of the partner etwork ,which can ssh the syslog server and send logs to it, as per rules [220] and [230]. [230] is a tcp connection on port 514 to allow logs to be sent, and is repeated on [890]. A such, this connection should be allowed, but syslog server will not start any communications with devices outside of admin network, as per rule[1140], so there should not be return traffic.
+(1320)7. This will not be allowed, as rule[230] states that the port for the 136.201.200.1 must be GREATER than 1023, because it will not be allowed due to this, the packet would be dropped by an implicit deny(or deny rule [290] which serves essentially the same purpose)
+(1330)8. Border router rip configuration starting at line [40] to [105] does not include any allowance for router 4.4.4.4, so it should not be allowed.
+(1340)9. This should not be allowed under normal circumstances, as the web server can only establish traffic to mysql, ntp and syslog servers. If the established traffic is not return traffic for rule[450], then it will be dropped due to not being explicitly allowed(rule [560]).
+(1350)10. rule[530] allows web server 147.17.1.70 to establish tcp connection with mysql database server and creates a reflect for "webtosql". Web server of address 147.17.1.20 is not explicitly permitted, as only 147.17.1.70 and workstations can access mysql database, so this will not be allowed.(should be denied by [560])
+(1360)11. rule [480], and [900] which allows internal machines to send logs to syslog on port 514, allows web server to establish tcp session with syslog server(again the sending of logs is allowed by this tcp session), so yes, this should be allowed.
+(1370)12. Any inside or outside machine can access the dns server, for outside machiens it is rule[240] that allows this, and return traffic may be allowed by rule [460] and [360], which allows the dns server to access any other machine.
+(1380)13. Mysql server can be access by the web server, but can only react to requests itself, such as at rule[1020], which evaluates return traffic to the web server. As a connection started by mysql database should not be allowed except for syslog logs, this connection should be dropped on implicit deny, or explicit deny any rule[1070].
+(1390)14. Rule [1040] allows mysql server(an dinternal machines) to send logs to the syslog server. This rule is a tcp request that allowss machines to contact port 514 of the syslog server, and as such, should be allowed, as it is the rule that allows logs ot be sent. 
+(1400)15. PC 147.17.2.67:T1234 appears to be a workstation pc, based on its address. This pc can access any web server on port 443 from a port greater than 1023, as per rule[620] and [380], which is a reflect rule, so return traffic should be handled by evaluate rule [270].
+(1410)16. Yes, as this is a workstation pc, traffic from it to mysql is permitted by rule [920], which is a reflect rule, so return traffic is handled by the evaluate rule [1010]
+(1420)17.This would not be allowed as rule[380] and [620] only allows the work stations to contact external web servers on port 443, there is no explicit perit for them to access external devices on port 25, so it would be denied.
+(1430)18.No, it should not be allowed without a previous request. Rule[270] and [490]evaluates webservertaffic, which would be a "temporary rule" of sorts defined by rule[620]and[380], so the response traffic requires this temporary rule to exist in order to be allowed.
+(1440)19. No, as rule at [680] permits access from admin pc to dns in particular on port 53, not 22, so as the communication in question would not be explicitly allowed, it would be denied.
+(1450)20. No, only pc's of range 147.17.4.1-127 are permitted to access via anydesk, as per rule[1130]. The pc in this question falls outside of that range, so the traffic would be denied due to not being explicitly allowed.
+
